@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clothes Shop</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!-- Header -->
+    <header>
+      <div class="header-inner">
+        <a href="index.html" class="logo">STYLE<span>.</span></a>
+        <nav>
+          <a href="#products">Shop</a>
+        </nav>
+        <button class="cart-icon-btn" id="cart-open-btn" aria-label="Open cart">
+          🛒
+          <span class="cart-badge" id="cart-badge" aria-live="polite">0</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+      <h1>Fresh Styles, Every Season</h1>
+      <p>Curated clothing for every occasion — delivered straight to your door.</p>
+      <a href="#products" class="btn btn-accent">Shop Now</a>
+    </section>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <div class="filter-inner">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="tops">Tops</button>
+        <button class="filter-btn" data-filter="bottoms">Bottoms</button>
+        <button class="filter-btn" data-filter="dresses">Dresses</button>
+        <button class="filter-btn" data-filter="outerwear">Outerwear</button>
+        <button class="filter-btn" data-filter="accessories">Accessories</button>
+      </div>
+    </div>
+
+    <!-- Products -->
+    <main class="products-section" id="products">
+      <h2 class="section-title">Our Collection</h2>
+      <div class="product-grid" id="product-grid"></div>
+    </main>
+
+    <!-- Cart overlay -->
+    <div class="cart-overlay" id="cart-overlay"></div>
+
+    <!-- Cart sidebar -->
+    <aside class="cart-sidebar" id="cart-sidebar" aria-label="Shopping cart">
+      <div class="cart-header">
+        <h2>Your Cart</h2>
+        <button class="cart-close-btn" id="cart-close-btn" aria-label="Close cart">✕</button>
+      </div>
+      <div class="cart-items" id="cart-items"></div>
+      <div class="cart-footer">
+        <div class="cart-total">
+          <span>Total</span>
+          <span id="cart-total">$0.00</span>
+        </div>
+        <button id="checkout-btn" onclick="Checkout.redirectToCheckout()">Checkout</button>
+        <p class="stripe-note">
+          Secured by <a href="https://stripe.com" target="_blank" rel="noopener noreferrer">Stripe</a>
+        </p>
+      </div>
+    </aside>
+
+    <!-- Toast -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <!-- Footer -->
+    <footer>
+      <p>&copy; 2024 STYLE. All rights reserved.</p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="js/products.js"></script>
+    <script src="js/cart.js"></script>
+    <script src="js/checkout.js"></script>
+    <script>
+      // ── Utilities ──────────────────────────────────────────────
+      function formatPrice(cents) {
+        return "$" + (cents / 100).toFixed(2);
+      }
+
+      function showToast(message) {
+        const toast = document.getElementById("toast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 2500);
+      }
+
+      // ── Cart UI ────────────────────────────────────────────────
+      function updateCartUI() {
+        const cart = Cart.getCart();
+        const count = Cart.getItemCount();
+        const total = Cart.getTotal();
+
+        // Badge
+        document.getElementById("cart-badge").textContent = count;
+
+        // Total
+        document.getElementById("cart-total").textContent = formatPrice(total);
+
+        // Items
+        const container = document.getElementById("cart-items");
+        if (cart.length === 0) {
+          container.innerHTML = `
+            <div class="cart-empty">
+              <div class="cart-empty-icon">🛍️</div>
+              <p>Your cart is empty.</p>
+              <p>Add some items to get started!</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = cart
+          .map(
+            (item) => `
+          <div class="cart-item" data-id="${item.id}">
+            <div class="cart-item-info">
+              <div class="cart-item-name">${item.name}</div>
+              <div class="cart-item-price">${formatPrice(item.price)} each</div>
+            </div>
+            <div class="cart-item-controls">
+              <button class="qty-btn" onclick="changeQty('${item.id}', -1)">−</button>
+              <span class="qty-value">${item.quantity}</span>
+              <button class="qty-btn" onclick="changeQty('${item.id}', 1)">+</button>
+            </div>
+            <button class="remove-btn" onclick="removeItem('${item.id}')" aria-label="Remove ${item.name}">🗑</button>
+          </div>`
+          )
+          .join("");
+      }
+
+      function openCart() {
+        document.getElementById("cart-sidebar").classList.add("open");
+        document.getElementById("cart-overlay").classList.add("open");
+      }
+
+      function closeCart() {
+        document.getElementById("cart-sidebar").classList.remove("open");
+        document.getElementById("cart-overlay").classList.remove("open");
+      }
+
+      function changeQty(productId, delta) {
+        const cart = Cart.getCart();
+        const item = cart.find((i) => i.id === productId);
+        if (item) {
+          Cart.updateQuantity(productId, item.quantity + delta);
+          updateCartUI();
+        }
+      }
+
+      function removeItem(productId) {
+        Cart.removeItem(productId);
+        updateCartUI();
+      }
+
+      // ── Product grid ───────────────────────────────────────────
+      function renderProducts(filter = "all") {
+        const grid = document.getElementById("product-grid");
+        const filtered =
+          filter === "all" ? PRODUCTS : PRODUCTS.filter((p) => p.category === filter);
+
+        grid.innerHTML = filtered
+          .map(
+            (product) => `
+          <article class="product-card">
+            <img
+              class="product-img"
+              src="${product.image}"
+              alt="${product.name}"
+              loading="lazy"
+            />
+            <div class="product-info">
+              <div class="product-category">${product.category}</div>
+              <div class="product-name">${product.name}</div>
+              <div class="product-desc">${product.description}</div>
+              <div class="product-footer">
+                <span class="product-price">${formatPrice(product.price)}</span>
+                <button
+                  class="add-to-cart-btn"
+                  onclick="addToCart('${product.id}')"
+                >
+                  Add to Cart
+                </button>
+              </div>
+            </div>
+          </article>`
+          )
+          .join("");
+      }
+
+      function addToCart(productId) {
+        const product = PRODUCTS.find((p) => p.id === productId);
+        if (!product) return;
+        Cart.addItem(product);
+        updateCartUI();
+        showToast(`"${product.name}" added to cart`);
+      }
+
+      // ── Event listeners ────────────────────────────────────────
+      document.getElementById("cart-open-btn").addEventListener("click", openCart);
+      document.getElementById("cart-close-btn").addEventListener("click", closeCart);
+      document.getElementById("cart-overlay").addEventListener("click", closeCart);
+
+      document.querySelectorAll(".filter-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          renderProducts(btn.dataset.filter);
+        });
+      });
+
+      // ── Init ───────────────────────────────────────────────────
+      renderProducts();
+      updateCartUI();
+      Checkout.init();
+    </script>
+  </body>
+</html>
